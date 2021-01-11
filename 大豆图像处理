@@ -1,0 +1,227 @@
+import cv2
+import numpy as np
+from PIL import Image#, ImageDraw
+from pyzbar.pyzbar import decode
+import xlwt
+
+# 创建一个workbook 设置编码
+workbook = xlwt.Workbook(encoding = 'utf-8')
+workbook1 = xlwt.Workbook(encoding='utf-8')
+# 创建一个worksheet
+worksheet = workbook.add_sheet('Worksheet')
+worksheet1 = workbook1.add_sheet('Worksheet1')
+
+# # 写入excel
+# # 参数对应 行, 列, 值
+worksheet.write(0, 0, label='图片编码')
+worksheet.write(0, 1, label='豆子个数')
+worksheet.write(0, 2, label='豆子平均面积(单位：平方厘米)')
+worksheet.write(0, 3, label='豆子平均周长(单位：厘米)')
+worksheet.write(0, 4, label='平均rgb')
+worksheet.write(0, 5, label='平均-长(单位：厘米)')
+worksheet.write(0, 6, label='平均宽(单位：厘米)')
+worksheet.write(0, 7, label='平均（长/宽）')
+worksheet.write(0, 8, label='照片名')
+worksheet1.write(0, 0, label='图片编码')
+worksheet1.write(0, 1, label='豆子标号')
+worksheet1.write(0, 2, label='豆子面积(单位：平方厘米)')
+worksheet1.write(0, 3, label='豆子周长(单位：厘米)')
+worksheet1.write(0, 4, label='rgb')
+worksheet1.write(0, 5, label='长(单位：厘米)')
+worksheet1.write(0, 6, label='宽(单位：厘米)')
+worksheet1.write(0, 7, label='长/宽')
+worksheet1.write(0, 8, label='照片名')
+
+row = 0
+pic = 0
+for pic in range(73,76):
+
+    n = str(pic)
+    s = n.zfill(4)
+    # 分水岭算法
+    # Step1. 加载图像
+    url = 'E:\Session1\DSC_{0}.JPG'.format(s)
+    img = cv2.imread(url)
+    try:
+        img = img[0:2060, 420:3180]
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # Step2.阈值分割，将图像分为黑白两部分
+        ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        # cv2.imshow("thresh", thresh)
+        # Step3. 对图像进行“开运算”，先腐蚀再膨胀
+        kernel = np.ones((3, 3), np.uint8)
+        opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+        # cv2.imshow("opening", opening)
+        # Step4. 对“开运算”的结果进行膨胀，得到大部分都是背景的区域
+        sure_bg = cv2.dilate(opening, kernel, iterations=3)
+        # cv2.imshow("sure_bg", sure_bg)
+        # Step5.通过distanceTransform获取前景区域
+        dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)  # DIST_L1 DIST_C只能 对应掩膜为3    DIST_L2 可以为3或者5
+        ret, sure_fg = cv2.threshold(dist_transform, 0.1 * dist_transform.max(), 255, 0)
+        # cv2.imshow("sure_fg", sure_fg)
+        # Step6. sure_bg与sure_fg相减,得到既有前景又有背景的重合区域   #此区域和轮廓区域的关系未知
+        sure_fg = np.uint8(sure_fg)
+        unknow = cv2.subtract(sure_bg, sure_fg)
+        # Step7. 连通区域处理
+        ret, markers = cv2.connectedComponents(sure_fg,connectivity=8) #对连通区域进行标号  序号为 0 - N-1
+        markers = markers + 1           #OpenCV 分水岭算法对物体做的标注必须都 大于1 ，背景为标号 为0  因此对所有markers 加1  变成了  1  -  N
+        #去掉属于背景区域的部分（即让其变为0，成为背景）
+        # 此语句的Python语法 类似于if ，“unknow==255” 返回的是图像矩阵的真值表。
+        markers[unknow==255] = 0
+        # Step8.分水岭算法
+        markers = cv2.watershed(img, markers)  #分水岭算法后，所有轮廓的像素点被标注为  -1
+        #print(markers)
+        imgcopy = img.copy()
+        imgcopy[markers == -1] = [0, 0, 0]   # 标注为-1 的像素点标 红
+
+        gray=cv2.cvtColor(imgcopy,cv2.COLOR_BGR2GRAY) #转换为灰度图
+        ret, dst = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(25, 25))#形态学去噪
+        dst=cv2.morphologyEx(dst,cv2.MORPH_OPEN,element)  #开运算去噪
+        contours, hierarchy = cv2.findContours(dst,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)  #轮廓检测函数
+        cv2.drawContours(dst,contours,-1,(120,0,0),2)  #绘制轮廓
+
+        count=0 #豆子计数
+        ares_avrg=0  #豆子平均
+        maxares=0   #最大的面积
+        maxper=0    #最大周长
+        count_set = -1 #白纸
+        #遍历找到的最大的面积---白纸
+        for cont in contours:
+            ares = cv2.contourArea(cont)#计算包围性状的面积
+            perimeter = cv2.arcLength(cont, True)
+            if ares < 2000:  # 过滤面积小于2500的形状
+                continue
+            count+=1    #总体计数加1
+            ares_avrg+=ares
+            if maxares < ares:
+                count_set = count
+                maxares = ares
+                maxper = perimeter
+
+        # # 二维码识别
+        # barcodes = decode(im_img)
+        # qrcode = ''
+        # for barcode in barcodes:
+        #     qrcode = barcode.data.decode("utf-8")
+        #     print(qrcode)
+        proportion = 18/maxares
+        proportion_per = 22.472/maxper
+        # print(count_set,"       ", maxares, "       ", proportion)
+        count = 0    #识别物计数
+        ares_avrg=0  #豆子平均面积
+        per_avrg = 0 #豆子平均周长
+        bea_count = 0  #豆子数
+        rearea = 0 #豆子的面积
+        RGB = [0, 0, 0]
+        avg_side = [0,0]
+
+        im_img = Image.open(url)
+        im = im_img.crop((420, 0, 3180, 2060))#[0:2060, 420:2550]
+        w, h = im.size  # 读取图片宽、高
+        im = im.convert('RGB')  # 将im对象转换为RBG对象
+
+        # 二维码识别
+        barcodes = decode(im_img)
+        qrcode = ''
+        for barcode in barcodes:
+            qrcode = barcode.data.decode("utf-8")
+            print(qrcode)
+        img1 = cv2.imread(url)
+        cv2.imwrite("E:\Default\{0}.jpg".format(qrcode), img1)
+
+        for cont in contours:
+            area = cv2.contourArea(cont)  # 计算包围性状的面积
+            perimeter = cv2.arcLength(cont, True)#计算周长
+            r = g = b = 0
+            if area < 2000:  # 过滤像素小于2500的形状
+                continue
+            count += 1  # 总体计数加1
+            if count == count_set:
+                continue
+            bea_count += 1
+
+            rearea = area * proportion
+            ares_avrg += rearea
+
+            reper =  perimeter * proportion_per
+            per_avrg += reper
+            # print("{}-blob:{}".format(count,rearea),end="  ") #打印出每个豆子的面积
+            rect = cv2.boundingRect(cont) #提取矩形坐标
+            #print(rect[0]+int(rect[2]/2),rect[1]+int(rect[3]/2))
+            # 求rgb
+            for i in range(-5, 5):
+                for j in range(-5, 5):
+                    r1, g1, b1 = im.getpixel((rect[0]+int(rect[2]/2) + i, rect[1] + int(rect[3]/2) + j))
+                    #print(r1,g1,b1)
+                    r += r1
+                    g += g1
+                    b += b1
+            # print('像素点坐标：',rect[0]+int(rect[2]/2) , rect[1] + int(rect[3]/2) )
+            rgb = (r / 100, g / 100, b / 100)
+            RGB[0] += rgb[0]
+            RGB[1] += rgb[1]
+            RGB[2] += rgb[2]
+            # print(rgb)
+
+            # print("x:{} y:{}".format(rect[0],rect[1]))#打印坐标
+            cv2.rectangle(img,rect,(0,0,0xff),1)#绘制矩形
+            y=10 if rect[1]<10 else rect[1] #防止编号到图片之外
+
+            cv2.putText(img,str(count), (rect[0], y), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 255, 0), 2) #在豆子左上角写上编号 绿色
+            cv2.putText(img,str(rearea)[:5], (rect[0] , rect[1] + int(rect[3]/2)), cv2.FONT_HERSHEY_COMPLEX, 0.7, (255, 255, 0), 2) #在豆子中间写上面积 蓝色
+
+            avg_side[0] += rect[2]*proportion_per
+            avg_side[1] += rect[3]*proportion_per
+
+            # 写入excel
+            # 参数对应 行, 列, 值
+            row += 1
+            worksheet1.write(row, 0, label= qrcode)
+            worksheet1.write(row, 1, label= '第'+str(bea_count)+'豆子')
+            worksheet1.write(row, 2, label= rearea)
+            worksheet1.write(row, 3, label= reper)
+            worksheet1.write(row, 4, label= str(rgb))
+            worksheet1.write(row, 5, label=rect[2]*proportion_per)
+            worksheet1.write(row, 6, label=rect[3]*proportion_per)
+            worksheet1.write(row, 7, label=rect[2]/rect[3])
+            worksheet1.write(row, 8, label='DSC_{0}.JPG'.format(s))
+
+        print('豆子个数：', bea_count)
+        print(RGB[0] / bea_count, RGB[1] / bea_count, RGB[2] / bea_count)
+        print("豆子平均面积:{}".format(round(ares_avrg/bea_count,5))) #打印出豆子的平均面积
+        print("豆子平均周长:{}".format(round(per_avrg / bea_count, 5)))  # 打印出豆子的平均周长
+        reavrg = round(ares_avrg/bea_count,5)
+        pervrg = round(per_avrg / bea_count, 5)
+        reRGB = (RGB[0] / bea_count, RGB[1] / bea_count, RGB[2] / bea_count)
+        AVGSIDE = (avg_side[0]/bea_count,avg_side[1]/bea_count)
+
+        worksheet.write(pic, 0, label=qrcode)
+        worksheet.write(pic, 1, label= bea_count)
+        worksheet.write(pic, 2, label=reavrg)
+        worksheet.write(pic, 3, label=pervrg)
+        worksheet.write(pic, 4, label=str(reRGB))
+        worksheet.write(pic, 5, label=AVGSIDE[0])
+        worksheet.write(pic, 6, label=AVGSIDE[1])
+        worksheet.write(pic, 7, label=AVGSIDE[0]/AVGSIDE[1])
+        worksheet.write(pic, 8, label='DSC_{0}.JPG'.format(s))
+
+
+        #cv2.namedWindow('imgcopy', cv2.WINDOW_NORMAL)
+        #cv2.resizeWindow('imgcopy',1000, 1000)
+        #cv2.imshow("imgcopy", imgcopy)
+        #cv2.namedWindow("DSC_{0}".format(s), cv2.WINDOW_NORMAL)
+        #cv2.resizeWindow("DSC_{0}".format(s),1000, 1000)
+        #cv2.imshow("DSC_{0}".format(s), img)
+        cv2.imwrite("E:\Session1\DSC_{0}.png".format(s),img)
+        cv2.imwrite("E:\Default\{0}.png".format(qrcode),img)
+        cv2.waitKey()
+    except:
+        continue
+# 保存
+workbook1.save('Excel1.xls')
+workbook.save('Excel2.xls')
+
+
+
+
