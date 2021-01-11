@@ -1,0 +1,1 @@
+@pyuic5 trafficui.ui -o trafficui.py
