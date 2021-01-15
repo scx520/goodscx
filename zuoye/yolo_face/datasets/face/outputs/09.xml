@@ -1,0 +1,26 @@
+<annotation>
+	<folder>images</folder>
+	<filename>09.jpg</filename>
+	<path>C:\Users\Administrator\Desktop\yolo_face\datasets\face\images\09.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>4304</width>
+		<height>5760</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>scx</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>1002</xmin>
+			<ymin>23</ymin>
+			<xmax>3645</xmax>
+			<ymax>2755</ymax>
+		</bndbox>
+	</object>
+</annotation>
