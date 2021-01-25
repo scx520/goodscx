@@ -1,0 +1,1 @@
+@pyuic5 haha.ui -o haha.py

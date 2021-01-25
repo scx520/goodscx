@@ -1,0 +1,38 @@
+jingmingming
+jingmingming
+邮箱：jingmingming@sina.com
+
+提交作业：网址
+
+本地新建文件夹 zuoye
+
+
+新建文件夹 zuoye
+打开gitbash
+切换到zuoye 路径
+
+
+初始化仓库 git init
+
+和远程仓库建立连接 连接名：myzuoye
+git remote add myzuoye :网址
+
+拉去远程主分支代码
+git pull --rebase myzuoye master
+
+新建分支
+get branch 姓名全拼学号
+
+切换分支
+git checkout 姓名全拼学号
+
+zuoye/新建文件 写代码
+
+添加修改
+git add .
+
+提交修改（生成版本）
+git commit -m "我的第N次作业"
+
+推给我的仓库
+git push --set-upstream 连接名字（myzuoye） 分支名（姓名学号）
